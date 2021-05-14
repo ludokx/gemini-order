@@ -70,6 +70,7 @@ const newOrder = async (account, sandbox, symbol, fiatAmount, isMaker, includeFe
         options: isMaker ? ['maker-or-cancel'] : ['immediate-or-cancel']
     };
 
+    let data;
     try {
         const orderResponse = await axios({
             method: 'POST',
@@ -77,11 +78,12 @@ const newOrder = async (account, sandbox, symbol, fiatAmount, isMaker, includeFe
             headers: await getHeaders(account, payload)
         });
 
-        const data = orderResponse.data;
+        data = orderResponse.data;
         console.log(data);
     } catch (e) {
         console.error(e);
     }
+    return data;
 }
 
 const main = async (event, context) => {
@@ -96,7 +98,13 @@ const main = async (event, context) => {
     }
     const orderType = (event.orderType || 'taker').toLowerCase();
     console.log(`New ${orderType} order for \$${event.fiatAmount} worth of ${event.symbol.toUpperCase().replace('USD', '')}`);
-    await newOrder(event.account, event.sandbox, event.symbol, event.fiatAmount, orderType === 'maker');
+    let tries = 0;
+    let success = false;
+    while (!success && tries++ < 3) {
+        const data = await newOrder(event.account, event.sandbox, event.symbol, event.fiatAmount, orderType === 'maker', false);
+        success = data && !data.is_cancelled;
+        console.log(`Order successful: ${success}, tries: ${tries}`);
+    }
     if (context) {
         return context.logStreamName;
     }
